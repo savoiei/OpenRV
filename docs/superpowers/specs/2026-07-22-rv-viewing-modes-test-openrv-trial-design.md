@@ -17,10 +17,10 @@ this fork's own `main`, not upstream `AcademySoftwareFoundation/OpenRV`.
 ## File placement
 
 Copy, unmodified, from `~/Documents/git/rv-test-suite/rv-viewing-modes-test/`
-into a new top-level folder in this repo:
+into a new folder alongside the existing C++ unit tests:
 
 ```
-tests/rv-viewing-modes-test/
+src/test/rv-viewing-modes-test/
   rv_viewing_modes_test.py
   cases.py
   goldens/
@@ -32,6 +32,13 @@ suite source).
 
 No changes to test code or helpers — `rvio_binary()` / `oiio_diff()` stay
 duplicated inline as they are in the source suite.
+
+Note: `src/test/` today holds only CMake-based C++ unit tests
+(`CrashDumpSmokeTest`, `CrashHandlerTest`, `FastMemcpyTest`,
+`LoadingSharedLibrariesTest`, `QFontTest`), each wired into
+`src/test/CMakeLists.txt` via `ADD_SUBDIRECTORY`. This suite is **not**
+added to that `CMakeLists.txt` — it's a standalone Python/rvio harness
+that happens to live in the same directory, not part of that CMake build.
 
 ## CI wiring
 
@@ -55,7 +62,7 @@ Add `.github/workflows/rv-viewing-modes-test.yml`, standalone (not part of
      `cmake --install _build --prefix $(pwd)/_install`)
   3. `brew install openimageio` (for `oiiotool`, required by the suite's
      pixel-diff checks)
-  4. `python3 tests/rv-viewing-modes-test/rv_viewing_modes_test.py --rv "$(pwd)/_install/RV.app"`
+  4. `python3 src/test/rv-viewing-modes-test/rv_viewing_modes_test.py --rv "$(pwd)/_install/RV.app"`
 
 Open item to verify on the first real run: the exact bundle path under
 `_install/`. It's inferred from `RV_APP_ROOT}/RV.app/Contents` in

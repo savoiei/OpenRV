@@ -1,0 +1,55 @@
+$ /Applications/RV.app/Contents/MacOS/rvio /tmp/claude-503/rvvt_6_9grkt8/layout_packed_default.rv -outhalf -err-to-out -t 1 -o /Users/savoiei/Documents/git/rv-viewing-modes-test/goldens/layout/session/layout_packed_default.#.exr
+--- session file ---
+GTOa (4)
+
+rv : RVSession (4)
+{
+    session
+    {
+        string viewNode = "defaultLayout"
+    }
+}
+
+sourceGroup000000_source : RVFileSource (1)
+{
+    media
+    {
+        string movie = "solid,width=128,height=72,depth=16f,fps=24.0,start=1,end=1,red=1.0,green=0.0,blue=0.0,alpha=1.0.movieproc"
+    }
+}
+
+sourceGroup000001_source : RVFileSource (1)
+{
+    media
+    {
+        string movie = "solid,width=128,height=72,depth=16f,fps=24.0,start=1,end=1,red=0.0,green=1.0,blue=0.0,alpha=1.0.movieproc"
+    }
+}
+
+sourceGroup000002_source : RVFileSource (1)
+{
+    media
+    {
+        string movie = "solid,width=128,height=72,depth=16f,fps=24.0,start=1,end=1,red=0.0,green=0.0,blue=1.0,alpha=1.0.movieproc"
+    }
+}
+
+exit: 0
+--- stdout ---
+/Applications/RV.app/Contents/MacOS/rvio
+Version 2026.0.0 (PRE-RELEASE), built on May 25 2026 at 09:08:31 (HEAD=ec67911 ([Open RV] 1bf0439e)).
+Copyright (c) 2026 Autodesk, Inc. All Rights Reserved.
+INFO: reading version 4 session file format
+INFO: loading solid,width=128,height=72,depth=16f,fps=24.0,start=1,end=1,red=1.0,green=0.0,blue=0.0,alpha=1.0.movieproc
+INFO: loading solid,width=128,height=72,depth=16f,fps=24.0,start=1,end=1,red=0.0,green=1.0,blue=0.0,alpha=1.0.movieproc
+INFO: loading solid,width=128,height=72,depth=16f,fps=24.0,start=1,end=1,red=0.0,green=0.0,blue=1.0,alpha=1.0.movieproc
+Importing MediaLibrary Plug-In: media_library_demo.media_library_environment_variable_reader_plugin
+Importing MediaLibrary Plug-In: media_library_demo.media_library_event_plugin
+Importing MediaLibrary Plug-In: shotgrid_login.media_library_shotgrid_plugin
+
+--- stderr ---
+Detected locale "C" with character encoding "US-ASCII", which is not UTF-8.
+Qt depends on a UTF-8 locale, and has switched to "UTF-8" instead.
+If this causes problems, reconfigure your locale. See the locale(1) manual
+for more information.
+

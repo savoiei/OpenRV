@@ -36,8 +36,13 @@ jobs:
         run: |
           RVIO="$(pwd)/_install/RV.app/Contents/MacOS/rvio"
           set +e
+          echo "--- hardware renderer (baseline, expected to fail same as before) ---"
           "$RVIO" "smptebars,width=256,height=144,depth=16f,fps=24.0,start=1,end=1.movieproc" \
-            -o /tmp/smoke.#.exr -t 1 -outhalf -err-to-out
+            -o /tmp/smoke-hw.#.exr -t 1 -outhalf -err-to-out
+          echo "exit code: $?"
+          echo "--- software renderer via new -swRenderer flag ---"
+          "$RVIO" -swRenderer "smptebars,width=256,height=144,depth=16f,fps=24.0,start=1,end=1.movieproc" \
+            -o /tmp/smoke-sw.#.exr -t 1 -outhalf -err-to-out
           echo "exit code: $?"
           set -e
         shell: bash

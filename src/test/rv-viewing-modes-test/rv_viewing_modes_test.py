@@ -464,9 +464,12 @@ def _check_rvio_result(case: Case, output_root: Path, proc: subprocess.Completed
 
 
 def run_rvio_mu(rvio: Path, case: Case, output_root: Path,
-                init_mu: Path, verbose: bool = False) -> tuple[bool, str]:
+                init_mu: Path, verbose: bool = False,
+                sw_renderer: bool = False) -> tuple[bool, str]:
     """Render a Case via the Mu -init mechanism."""
     cmd = [str(rvio)]
+    if sw_renderer:
+        cmd.append("-swRenderer")
     cmd.extend(s.to_filename() for s in case.sources)
     cmd.extend([
         "-init", str(init_mu),
@@ -490,16 +493,19 @@ def run_rvio_mu(rvio: Path, case: Case, output_root: Path,
 
 
 def run_rvio_session(rvio: Path, case: Case, output_root: Path,
-                     session: Path, verbose: bool = False) -> tuple[bool, str]:
+                     session: Path, verbose: bool = False,
+                     sw_renderer: bool = False) -> tuple[bool, str]:
     """Render a Case via a generated .rv session file."""
-    cmd = [
-        str(rvio),
+    cmd = [str(rvio)]
+    if sw_renderer:
+        cmd.append("-swRenderer")
+    cmd.extend([
         str(session),
         "-outhalf",
         "-err-to-out",
         "-t", _frame_arg(case.frames),
         "-o", case.output_pattern(output_root),
-    ]
+    ])
     if verbose:
         print("  $", " ".join(cmd))
 
@@ -562,17 +568,21 @@ def oiio_diff(a: Path, b: Path, tol: Tolerance) -> DiffResult:
 
 
 def render_case(rvio: Path, case: Case, output_root: Path,
-                tmp_path: Path, verbose: bool) -> tuple[bool, str]:
+                tmp_path: Path, verbose: bool,
+                sw_renderer: bool = False) -> tuple[bool, str]:
     if case.mechanism == "mu":
         init = generate_mu_init(case, tmp_path / f"{case.name}.mu")
-        return run_rvio_mu(rvio, case, output_root, init, verbose=verbose)
+        return run_rvio_mu(rvio, case, output_root, init, verbose=verbose,
+                           sw_renderer=sw_renderer)
     if case.mechanism == "session":
         session = generate_session_file(case, tmp_path / f"{case.name}.rv")
-        return run_rvio_session(rvio, case, output_root, session, verbose=verbose)
+        return run_rvio_session(rvio, case, output_root, session, verbose=verbose,
+                                sw_renderer=sw_renderer)
     return False, f"unknown mechanism: {case.mechanism}"
 
 
-def cmd_generate(rvio: Path, cases: list[Case], verbose: bool) -> int:
+def cmd_generate(rvio: Path, cases: list[Case], verbose: bool,
+                 sw_renderer: bool = False) -> int:
     fails = 0
     with tempfile.TemporaryDirectory(prefix="rvvt_") as tmp:
         tmp_path = Path(tmp)
@@ -580,7 +590,8 @@ def cmd_generate(rvio: Path, cases: list[Case], verbose: bool) -> int:
             n_frames = len(list(c.frame_numbers()))
             print(f"[generate] {c.section}/{c.mechanism}/{c.name}  "
                   f"({n_frames} frame{'s' if n_frames != 1 else ''})")
-            ok, msg = render_case(rvio, c, GOLDENS_DIR, tmp_path, verbose)
+            ok, msg = render_case(rvio, c, GOLDENS_DIR, tmp_path, verbose,
+                                  sw_renderer=sw_renderer)
             if not ok:
                 print(f"  FAIL: {msg}")
                 fails += 1
@@ -677,7 +688,8 @@ def cmd_validate(cases: list[Case]) -> int:
     return 0
 
 
-def cmd_test(rvio: Path, cases: list[Case], verbose: bool) -> int:
+def cmd_test(rvio: Path, cases: list[Case], verbose: bool,
+            sw_renderer: bool = False) -> int:
     fails = 0
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="rvvt_") as tmp:
@@ -692,7 +704,8 @@ def cmd_test(rvio: Path, cases: list[Case], verbose: bool) -> int:
                 )
                 continue
 
-            ok, msg = render_case(rvio, c, OUT_DIR, tmp_path, verbose)
+            ok, msg = render_case(rvio, c, OUT_DIR, tmp_path, verbose,
+                                  sw_renderer=sw_renderer)
             if not ok:
                 print(f"[test] {c.section}/{c.mechanism}/{c.name}: rvio FAIL: {msg}")
                 fails += 1
@@ -738,6 +751,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     ap.add_argument("--filter", default="",
                     help="Run only cases whose name or section contains this substring.")
     ap.add_argument("--verbose", "-v", action="store_true")
+    ap.add_argument("--sw-renderer", action="store_true",
+                    help="Pass -swRenderer to rvio (macOS only): use Apple's software "
+                         "CGL renderer instead of hardware-accelerated. For "
+                         "environments with no accelerated OpenGL, e.g. some CI runners.")
     args = ap.parse_args(argv)
 
     try:
@@ -770,8 +787,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.validate:
         return cmd_validate(cases)
     if args.generate:
-        return cmd_generate(rvio, cases, args.verbose)
-    return cmd_test(rvio, cases, args.verbose)
+        return cmd_generate(rvio, cases, args.verbose, sw_renderer=args.sw_renderer)
+    return cmd_test(rvio, cases, args.verbose, sw_renderer=args.sw_renderer)
 
 
 if __name__ == "__main__":

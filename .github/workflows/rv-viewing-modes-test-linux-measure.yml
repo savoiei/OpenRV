@@ -46,16 +46,22 @@ jobs:
       # oiiotool binary). Fetch one via micromamba/conda-forge -- fast, and
       # deliberately BEFORE the ~1hr RV build below so a broken oiiotool
       # install fails in ~1 minute instead of after the full build.
+      # Deliberately NOT added to $GITHUB_PATH: that would leak into every
+      # later step, including the RV build below. It bit us once already --
+      # RV's own OIIO dependency build linked against this env's libxml2.so
+      # instead of its own vendored one, because $GITHUB_PATH additions
+      # persist for the rest of the job and CMake's FindLibXml2 picked up
+      # this env's xml2-config off PATH. Keep it out of PATH entirely until
+      # the one step that actually needs oiiotool, below.
       - name: Install oiiotool via micromamba (fail fast, before the RV build)
         run: |
           curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
           export MAMBA_ROOT_PREFIX="$HOME/micromamba"
           ./bin/micromamba create -y -n oiio -c conda-forge openimageio
-          echo "$HOME/micromamba/envs/oiio/bin" >> "$GITHUB_PATH"
         shell: bash
 
       - name: Verify oiiotool
-        run: oiiotool --version
+        run: $HOME/micromamba/envs/oiio/bin/oiiotool --version
         shell: bash
 
       - name: Check out repository code
@@ -83,7 +89,9 @@ jobs:
       # red case.
       - name: Run rv-viewing-modes-test (measure against existing goldens)
         continue-on-error: true
-        run: python3 src/test/rv-viewing-modes-test/rv_viewing_modes_test.py --rv "$(pwd)/_install" -v
+        run: |
+          export PATH="$HOME/micromamba/envs/oiio/bin:$PATH"
+          python3 src/test/rv-viewing-modes-test/rv_viewing_modes_test.py --rv "$(pwd)/_install" -v
         shell: bash
 
       - name: DEBUG - dump rvio per-case logs

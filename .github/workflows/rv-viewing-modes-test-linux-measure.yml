@@ -1,0 +1,96 @@
+name: OpenRV Viewing Modes Test - Linux (measure, trial)
+
+# Trial per docs/decisions/2026-07-27-cross-platform-reference-strategy.md
+# (rv-test-suite repo) section 4, "Proposed first action: measure" --
+# render the existing 24 cases on Linux against the macOS-derived goldens
+# and count failures, with no suite/golden changes. Manual dispatch only;
+# not wired into pull_request so it doesn't run on every push.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  measure-linux:
+    name: 'rv-viewing-modes-test measure (Rocky Linux 9 CY2025 Release)'
+    runs-on: ubuntu-latest
+    container:
+      image: amd64/rockylinux:9
+      volumes:
+        - /usr/local/lib/android:/github/home/android
+        - /usr/share/dotnet:/github/home/dotnet
+        - /opt/ghc:/github/home/ghc
+        - /usr/local/.ghcup:/github/home/.ghcup
+        - /usr/local/graalvm:/github/home/graalvm
+        - /usr/local/share/powershell:/github/home/powershell
+        - /usr/local/share/chromium:/github/home/chromium
+        - /usr/local/lib/node_modules:/github/home/node_modules
+        - /opt/hostedtoolcache:/github/home/hostedtoolcache
+        - /usr/local/share/boost:/github/home/boost
+        - /usr/share/swift:/github/home/swift
+        - /usr/share/miniconda:/github/home/miniconda
+        - /usr/local/share/vcpkg:/github/home/vcpkg
+        - /home/runner/.cargo:/github/home/.cargo
+        - /home/runner/.rustup:/github/home/.rustup
+    steps:
+      - name: Install git/curl/tar (base image is minimal)
+        run: dnf install -y git curl tar bzip2 ca-certificates
+        shell: bash
+
+      # RV's own OIIO dependency build sets -DOIIO_BUILD_TOOLS=OFF, so no
+      # oiiotool comes out of the RV build on any platform (confirmed: the
+      # installed RV.app on macOS ships libOpenImageIO.dylib but no
+      # oiiotool binary). Fetch one via micromamba/conda-forge -- fast, and
+      # deliberately BEFORE the ~1hr RV build below so a broken oiiotool
+      # install fails in ~1 minute instead of after the full build.
+      - name: Install oiiotool via micromamba (fail fast, before the RV build)
+        run: |
+          curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
+          export MAMBA_ROOT_PREFIX="$HOME/micromamba"
+          ./bin/micromamba create -y -n oiio -c conda-forge openimageio
+          echo "$HOME/micromamba/envs/oiio/bin" >> "$GITHUB_PATH"
+        shell: bash
+
+      - name: Verify oiiotool
+        run: oiiotool --version
+        shell: bash
+
+      - name: Check out repository code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          submodules: recursive
+
+      - uses: ./.github/actions/build-linux
+        with:
+          rocky-version: "9"
+          build-type: "Release"
+          qt-version: "6.5.3"
+          cmake-version: "3.31.6"
+          python-version: "3.11.8"
+          vfx-platform: "CY2025"
+          extra_repo: "crb"
+
+      - name: Verify built rvio location
+        run: ls -la "$(pwd)/_install/bin/rvio"
+        shell: bash
+
+      # Measure only: run against the existing (macOS-derived) goldens
+      # as-is, no --generate, no suite changes. continue-on-error so we
+      # get the full pass/fail breakdown instead of stopping at the first
+      # red case.
+      - name: Run rv-viewing-modes-test (measure against existing goldens)
+        continue-on-error: true
+        run: python3 src/test/rv-viewing-modes-test/rv_viewing_modes_test.py --rv "$(pwd)/_install" -v
+        shell: bash
+
+      - name: DEBUG - dump rvio per-case logs
+        if: always()
+        run: |
+          find src/test/rv-viewing-modes-test/out -name '*.log' -print -exec cat {} \; || echo "no per-case logs found"
+        shell: bash
+
+      - name: Upload measured output (rendered frames + logs)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-measure-output
+          path: src/test/rv-viewing-modes-test/out

@@ -33,8 +33,11 @@ jobs:
         - /home/runner/.cargo:/github/home/.cargo
         - /home/runner/.rustup:/github/home/.rustup
     steps:
-      - name: Install git/curl/tar (base image is minimal)
-        run: dnf install -y git curl tar bzip2 ca-certificates
+      # curl is deliberately not listed: the base image ships curl-minimal,
+      # which already provides /usr/bin/curl, and dnf install curl conflicts
+      # with it (curl-minimal vs curl package conflict).
+      - name: Install git/tar/bzip2 (base image is minimal)
+        run: dnf install -y git tar bzip2 ca-certificates
         shell: bash
 
       # RV's own OIIO dependency build sets -DOIIO_BUILD_TOOLS=OFF, so no

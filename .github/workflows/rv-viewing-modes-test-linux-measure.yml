@@ -7,6 +7,7 @@ name: OpenRV Viewing Modes Test - Linux (measure, trial)
 # not wired into pull_request so it doesn't run on every push.
 
 on:
+  pull_request:
   workflow_dispatch:
 
 jobs:

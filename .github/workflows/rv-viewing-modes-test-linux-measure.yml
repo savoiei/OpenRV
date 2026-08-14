@@ -83,6 +83,34 @@ jobs:
         run: ls -la "$(pwd)/_install/bin/rvio"
         shell: bash
 
+      # All 24 cases crashed with rvio exit -11 (SIGSEGV) and empty
+      # stdout/stderr on the previous run (31831694671) -- same crash
+      # regardless of case content, so this looks like an early-startup
+      # crash (OSMesa context creation / GL query in main.cpp), not
+      # anything specific to a view mode. Check for missing/mismatched
+      # shared libs, and try the simplest possible render before running
+      # the real suite.
+      - name: DEBUG - ldd rvio and its OSMesa dependency
+        if: always()
+        run: |
+          RVIO="$(pwd)/_install/bin/rvio"
+          echo "--- ldd $RVIO ---"
+          ldd "$RVIO" || true
+          echo "--- not found entries ---"
+          ldd "$RVIO" 2>&1 | grep -i "not found" || echo "(none)"
+          echo "--- system OSMesa/Mesa packages ---"
+          rpm -qa | grep -i mesa || echo "(no mesa rpm packages found)"
+        shell: bash
+
+      - name: DEBUG - bare rvio smoke test (single trivial render, no session)
+        continue-on-error: true
+        run: |
+          RVIO="$(pwd)/_install/bin/rvio"
+          "$RVIO" "smptebars,width=64,height=64,depth=16f,fps=24.0,start=1,end=1.movieproc" \
+            -o /tmp/smoke-linux.#.exr -t 1 -outhalf -err-to-out
+          echo "exit code: $?"
+        shell: bash
+
       # Measure only: run against the existing (macOS-derived) goldens
       # as-is, no --generate, no suite changes. continue-on-error so we
       # get the full pass/fail breakdown instead of stopping at the first

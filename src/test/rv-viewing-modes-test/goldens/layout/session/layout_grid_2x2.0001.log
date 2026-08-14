@@ -1,4 +1,4 @@
-$ /Applications/RV.app/Contents/MacOS/rvio /tmp/claude-503/rvvt_6_9grkt8/layout_grid_2x2.rv -outhalf -err-to-out -t 1 -o /Users/savoiei/Documents/git/rv-viewing-modes-test/goldens/layout/session/layout_grid_2x2.#.exr
+$ /Users/runner/work/OpenRV/OpenRV/_install/RV.app/Contents/MacOS/rvio -swRenderer /var/folders/g3/pffjr_y96bq06blnkf72x_hw0000gn/T/rvvt_h7wr4pfx/layout_grid_2x2.rv -outhalf -err-to-out -t 1 -o /Users/runner/work/OpenRV/OpenRV/src/test/rv-viewing-modes-test/goldens/layout/session/layout_grid_2x2.#.exr
 --- session file ---
 GTOa (4)
 
@@ -55,9 +55,11 @@ defaultLayout : RVLayoutGroup (1)
 
 exit: 0
 --- stdout ---
-/Applications/RV.app/Contents/MacOS/rvio
-Version 2026.0.0 (PRE-RELEASE), built on May 25 2026 at 09:08:31 (HEAD=ec67911 ([Open RV] 1bf0439e)).
-Copyright (c) 2026 Autodesk, Inc. All Rights Reserved.
+INFO: Crash handler initialized successfully
+INFO: Crash dumps will be saved to: /Users/runner/Library/Logs/ASWF/Crashes/
+/Users/runner/work/OpenRV/OpenRV/_install/RV.app/Contents/MacOS/rvio
+Version 4.0.0 (RELEASE), built on Aug 13 2026 at 22:27:17 (HEAD=4a25b4f).
+Copyright Contributors to the Open RV Project
 INFO: reading version 4 session file format
 INFO: loading solid,width=128,height=72,depth=16f,fps=24.0,start=1,end=1,red=1.0,green=0.0,blue=0.0,alpha=1.0.movieproc
 INFO: loading solid,width=128,height=72,depth=16f,fps=24.0,start=1,end=1,red=0.0,green=1.0,blue=0.0,alpha=1.0.movieproc
@@ -65,11 +67,12 @@ INFO: loading solid,width=128,height=72,depth=16f,fps=24.0,start=1,end=1,red=0.0
 INFO: loading solid,width=128,height=72,depth=16f,fps=24.0,start=1,end=1,red=1.0,green=0.0,blue=0.0,alpha=0.5.movieproc
 Importing MediaLibrary Plug-In: media_library_demo.media_library_environment_variable_reader_plugin
 Importing MediaLibrary Plug-In: media_library_demo.media_library_event_plugin
-Importing MediaLibrary Plug-In: shotgrid_login.media_library_shotgrid_plugin
 
 --- stderr ---
 Detected locale "C" with character encoding "US-ASCII", which is not UTF-8.
 Qt depends on a UTF-8 locale, and has switched to "UTF-8" instead.
 If this causes problems, reconfigure your locale. See the locale(1) manual
 for more information.
+This plugin does not support createPlatformOpenGLContext!
+This plugin does not support createPlatformOpenGLContext!
 

@@ -43,22 +43,6 @@ jobs:
         run: python3 src/test/rv-viewing-modes-test/rv_viewing_modes_test.py --rv "$(pwd)/_install/RV.app" --sw-renderer
         shell: bash
 
-      # TEMPORARY (trial): regenerate the layout goldens under -swRenderer so
-      # they match what this CI runner actually renders, instead of the
-      # GPU-rendered goldens checked in from local macOS. Remove this step
-      # and the upload step below once the new goldens are committed.
-      - name: TEMP - regenerate layout goldens under -swRenderer
-        if: always()
-        run: python3 src/test/rv-viewing-modes-test/rv_viewing_modes_test.py --rv "$(pwd)/_install/RV.app" --generate --sw-renderer --filter layout
-        shell: bash
-
-      - name: TEMP - upload regenerated layout goldens
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: layout-goldens-sw-renderer
-          path: src/test/rv-viewing-modes-test/goldens/layout
-
       - name: DEBUG - dump rvio per-case logs
         if: always()
         run: |

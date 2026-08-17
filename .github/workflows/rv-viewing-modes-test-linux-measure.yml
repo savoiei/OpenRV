@@ -95,40 +95,34 @@ jobs:
           path: _install
           retention-days: 3
 
-      # All 24 cases crashed with rvio exit -11 (SIGSEGV) and empty
-      # stdout/stderr on the previous run (31831694671) -- same crash
-      # regardless of case content, so this looks like an early-startup
-      # crash (OSMesa context creation / GL query in main.cpp), not
-      # anything specific to a view mode. Check for missing/mismatched
-      # shared libs, and try the simplest possible render before running
-      # the real suite.
-      # Round 4 (run 32043979059) found that `_install/bin/rvio` is a tcsh
-      # wrapper script (`#!/bin/tcsh -f`, same pattern as rvio.wrapper /
-      # rv.wrapper / etc.), not the real binary -- it sets RV_HOME and
-      # LD_LIBRARY_PATH, then execs `$RV_HOME/bin/rvio.bin`. gdb can't run
-      # a shell script directly ("not in executable format"), which is why
-      # round 3's backtrace attempt produced nothing. This round: target
-      # rvio.bin directly, replicating the RV_HOME/LD_LIBRARY_PATH the
-      # wrapper would have set (see src/bin/imgtools/rvio/rvio.wrapper).
-      - name: DEBUG - gdb backtrace of the real rvio.bin binary
-        if: always()
+      # Root cause found (run 32053038154 gdb backtrace): rvio's
+      # CMakeLists.txt always defines -DRVIO_HW=1 on every platform, so
+      # plain `rvio` always takes the FBOVideoDevice (hardware/GLX)
+      # branch in main.cpp -- it crashes in FBOVideoDevice's constructor
+      # trying to create a real GL context, because this container has
+      # no X server/GPU. RV ships a dedicated headless-rendering binary
+      # for exactly this, `rvio_sw` (src/bin/imgtools/rvio_sw/ -- same
+      # main.cpp/utf8Main.cpp sources, built WITHOUT RVIO_HW, so it takes
+      # the OSMesaVideoDevice branch instead), and it's already built and
+      # installed alongside rvio by this same build. macOS solves the
+      # same headless-GPU problem with a runtime flag (-swRenderer) since
+      # its FBOVideoDevice can toggle at runtime; Linux instead ships an
+      # entirely separate binary for it.
+      #
+      # The suite's rvio_binary() only ever looks for a file literally
+      # named `rvio`/`rvio.exe`, so point it at rvio_sw without touching
+      # suite code: overwrite the `rvio` wrapper script with a copy of
+      # rvio_sw's wrapper. The wrapper's internal `name` variable (which
+      # determines which `.bin` it execs) stays "rvio_sw" regardless of
+      # what the file on disk is named, so this transparently runs the
+      # software-rendering binary under the `rvio` name the suite expects.
+      - name: Use rvio_sw (headless/software rendering) as rvio for this CI runner
         run: |
-          dnf install -y gdb file
-          export RV_HOME="$(pwd)/_install"
-          RVIO_BIN="$RV_HOME/bin/rvio.bin"
-          echo "--- file $RVIO_BIN ---"
-          file "$RVIO_BIN" || true
-          if [ ! -e "$RVIO_BIN" ]; then
-            echo "not found -- listing $RV_HOME/bin:"
-            ls -la "$RV_HOME/bin"
-          fi
-          export LD_LIBRARY_PATH="$RV_HOME/lib:${LD_LIBRARY_PATH:-}"
-          echo "--- system OSMesa/Mesa packages ---"
-          rpm -qa | grep -i mesa || echo "(no mesa rpm packages found)"
-          echo "--- gdb backtrace ---"
-          gdb --batch -ex run -ex "thread apply all bt full" -ex quit --args \
-            "$RVIO_BIN" "smptebars,width=64,height=64,depth=16f,fps=24.0,start=1,end=1.movieproc" \
-            -o /tmp/smoke-gdb.#.exr -t 1 -outhalf -err-to-out 2>&1 | tail -200
+          RV_HOME="$(pwd)/_install"
+          echo "--- confirming rvio_sw works before swapping it in ---"
+          "$RV_HOME/bin/rvio_sw" "smptebars,width=64,height=64,depth=16f,fps=24.0,start=1,end=1.movieproc" \
+            -o /tmp/smoke-sw.#.exr -t 1 -outhalf -err-to-out
+          cp -f "$RV_HOME/bin/rvio_sw" "$RV_HOME/bin/rvio"
         shell: bash
 
       # Measure only: run against the existing (macOS-derived) goldens

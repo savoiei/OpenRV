@@ -90,25 +90,32 @@ jobs:
       # anything specific to a view mode. Check for missing/mismatched
       # shared libs, and try the simplest possible render before running
       # the real suite.
-      - name: DEBUG - ldd rvio and its OSMesa dependency
+      # Round 3 (run 31839202650) confirmed a real SIGSEGV on the bare
+      # smoke test too (not just full cases): "Segmentation fault (core
+      # dumped)" on the very first invocation, no session file involved.
+      # `ldd $RVIO` reported "not a dynamic executable" -- unexpected and
+      # unexplained (rvio is presumably either a wrapper script or a
+      # static binary; either way ldd on it told us nothing useful). This
+      # round: find out what kind of file it actually is, and get a real
+      # backtrace via gdb instead of guessing again.
+      - name: DEBUG - inspect rvio and get a gdb backtrace of the crash
         if: always()
         run: |
+          dnf install -y gdb file
           RVIO="$(pwd)/_install/bin/rvio"
-          echo "--- ldd $RVIO ---"
-          ldd "$RVIO" || true
-          echo "--- not found entries ---"
-          ldd "$RVIO" 2>&1 | grep -i "not found" || echo "(none)"
+          echo "--- file $RVIO ---"
+          file "$RVIO"
+          echo "--- readlink -f ---"
+          readlink -f "$RVIO" || true
+          echo "--- first 300 bytes (in case it's a wrapper script) ---"
+          head -c 300 "$RVIO" | cat -v
+          echo
           echo "--- system OSMesa/Mesa packages ---"
           rpm -qa | grep -i mesa || echo "(no mesa rpm packages found)"
-        shell: bash
-
-      - name: DEBUG - bare rvio smoke test (single trivial render, no session)
-        continue-on-error: true
-        run: |
-          RVIO="$(pwd)/_install/bin/rvio"
-          "$RVIO" "smptebars,width=64,height=64,depth=16f,fps=24.0,start=1,end=1.movieproc" \
-            -o /tmp/smoke-linux.#.exr -t 1 -outhalf -err-to-out
-          echo "exit code: $?"
+          echo "--- gdb backtrace ---"
+          gdb --batch -ex run -ex "thread apply all bt full" -ex quit --args \
+            "$RVIO" "smptebars,width=64,height=64,depth=16f,fps=24.0,start=1,end=1.movieproc" \
+            -o /tmp/smoke-gdb.#.exr -t 1 -outhalf -err-to-out 2>&1 | tail -150
         shell: bash
 
       # Measure only: run against the existing (macOS-derived) goldens

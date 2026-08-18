@@ -52,7 +52,7 @@ jobs:
         shell: bash
 
       - name: Verify oiiotool
-        run: "$(pwd)/micromamba-root/envs/oiio/Library/bin/oiiotool.exe" --version
+        run: $(pwd)/micromamba-root/envs/oiio/Library/bin/oiiotool.exe --version
         shell: bash
 
       # Try plain rvio.exe as-is first, per user direction: cheapest

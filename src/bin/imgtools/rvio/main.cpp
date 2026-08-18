@@ -250,6 +250,7 @@ int audioChannels = 0;
 char* outStereo = (char*)"";
 float outfps = 0;
 int nosession = 0;
+int swRenderer = 0;
 int outhalf = 0;
 int out8 = 0;
 int leaderFrames = 1;
@@ -973,7 +974,27 @@ int utf8Main(int argc, char* argv[])
     setEnvVar("LC_ALL", "C");
     TwkFB::ThreadPool::initialize();
 
+    //
+    //  -swRenderer must take effect before the first FBOVideoDevice is
+    //  constructed below, which happens before arg_parse() runs later in
+    //  this function -- so scan for it here directly. It's also registered
+    //  in the arg_parse() table further down so that call doesn't reject it
+    //  as an unrecognized flag.
+    //
+    for (int i = 1; i < argc; ++i)
+    {
+        if (!strcmp(argv[i], "-swRenderer"))
+        {
+            swRenderer = 1;
+            break;
+        }
+    }
+
 #ifdef RVIO_HW
+    if (swRenderer)
+    {
+        TwkGLF::FBOVideoDevice::useSWRendererOnMac(true);
+    }
     auto dummyDev = std::make_unique<TwkGLF::FBOVideoDevice>(nullptr, 10, 10, false);
 #else
     TwkGLF::OSMesaVideoDevice* dummyDev = new TwkGLF::OSMesaVideoDevice(0, 10, 10, true);
@@ -1344,7 +1365,11 @@ int utf8Main(int argc, char* argv[])
             "required)",
             //"-noprerender", ARG_FLAG(&noprerender), "Turn off prerendering
             // optimization",
-            "-flags", ARG_SUBR(&Rv::parseMuFlags), "Arbitrary flags (flag, or 'name=value') for Mu",
+            "-flags", ARG_SUBR(&Rv::parseMuFlags), "Arbitrary flags (flag, or 'name=value') for Mu", "-swRenderer",
+            ARG_FLAG(&swRenderer),
+            "Force Apple's software CGL renderer (kCGLRendererAppleSWID) instead "
+            "of hardware-accelerated (macOS only; for headless/CI environments "
+            "without GPU-accelerated OpenGL)",
 #if defined(PLATFORM_WINDOWS) && !defined(NDEBUG)
             "-sleep %d", &sleepTime, "Sleep (in seconds) before starting to allow attaching debugger",
 #endif

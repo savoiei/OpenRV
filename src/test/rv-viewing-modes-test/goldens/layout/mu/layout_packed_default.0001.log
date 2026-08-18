@@ -1,0 +1,23 @@
+$ /Users/runner/work/OpenRV/OpenRV/_install/RV.app/Contents/MacOS/rvio -swRenderer solid,width=128,height=72,depth=16f,fps=24.0,start=1,end=1,red=1.0,green=0.0,blue=0.0,alpha=1.0.movieproc solid,width=128,height=72,depth=16f,fps=24.0,start=1,end=1,red=0.0,green=1.0,blue=0.0,alpha=1.0.movieproc solid,width=128,height=72,depth=16f,fps=24.0,start=1,end=1,red=0.0,green=0.0,blue=1.0,alpha=1.0.movieproc -init /var/folders/g3/pffjr_y96bq06blnkf72x_hw0000gn/T/rvvt_h7wr4pfx/layout_packed_default.mu -outhalf -err-to-out -t 1 -o /Users/runner/work/OpenRV/OpenRV/src/test/rv-viewing-modes-test/goldens/layout/mu/layout_packed_default.#.exr
+exit: 0
+--- stdout ---
+INFO: Crash handler initialized successfully
+INFO: Crash dumps will be saved to: /Users/runner/Library/Logs/ASWF/Crashes/
+/Users/runner/work/OpenRV/OpenRV/_install/RV.app/Contents/MacOS/rvio
+Version 4.0.0 (RELEASE), built on Aug 13 2026 at 22:27:17 (HEAD=4a25b4f).
+Copyright Contributors to the Open RV Project
+Importing MediaLibrary Plug-In: media_library_demo.media_library_environment_variable_reader_plugin
+Importing MediaLibrary Plug-In: media_library_demo.media_library_event_plugin
+INFO: solid,width=128,height=72,depth=16f,fps=24.0,start=1,end=1,red=1.0,green=0.0,blue=0.0,alpha=1.0.movieproc
+INFO: solid,width=128,height=72,depth=16f,fps=24.0,start=1,end=1,red=0.0,green=1.0,blue=0.0,alpha=1.0.movieproc
+INFO: solid,width=128,height=72,depth=16f,fps=24.0,start=1,end=1,red=0.0,green=0.0,blue=1.0,alpha=1.0.movieproc
+rvt_viewing: applying setup
+
+--- stderr ---
+Detected locale "C" with character encoding "US-ASCII", which is not UTF-8.
+Qt depends on a UTF-8 locale, and has switched to "UTF-8" instead.
+If this causes problems, reconfigure your locale. See the locale(1) manual
+for more information.
+This plugin does not support createPlatformOpenGLContext!
+This plugin does not support createPlatformOpenGLContext!
+

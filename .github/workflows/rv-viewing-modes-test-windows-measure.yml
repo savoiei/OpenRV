@@ -1,0 +1,96 @@
+name: OpenRV Viewing Modes Test - Windows (measure, trial)
+
+# Trial per docs/decisions/2026-07-27-cross-platform-reference-strategy.md
+# (rv-test-suite repo) section 4, "Proposed first action: measure" --
+# same idea as the Linux measure workflow, now for Windows. Try plain
+# rvio.exe as-is first (no known software-render fallback binary/flag
+# exists for it here, unlike Linux's rvio_sw or macOS's -swRenderer) --
+# Qt's bundled opengl32sw.dll may let it work anyway. No suite/golden
+# changes.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  measure-windows:
+    name: 'rv-viewing-modes-test measure (Windows 2022 x86_64 CY2025 Release)'
+    runs-on: windows-2022
+    env:
+      SCCACHE_GHA_ENABLED: false
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          submodules: recursive
+
+      - uses: ./.github/actions/build-windows
+        with:
+          build-type: "Release"
+          qt-version: "6.5.3"
+          python-version: "3.11"
+          cmake-version: "3.31.6"
+          vfx-platform: "CY2025"
+          msvc-component: "14.40.17.10.x86.x64"
+          msvc-compiler: "14.40.33807"
+
+      - name: Verify built rvio.exe location
+        run: ls -la "$(pwd)/_install/bin/rvio.exe"
+        shell: bash
+
+      # Same reasoning as the Linux workflow: fetch oiiotool separately
+      # (RV's own OIIO dependency build sets -DOIIO_BUILD_TOOLS=OFF on
+      # every platform) via micromamba/conda-forge, fail fast before
+      # relying on it, and keep it OFF $GITHUB_PATH so it can't leak into
+      # any other step -- only export PATH inline in the one step that
+      # needs it.
+      - name: Install oiiotool via micromamba (fail fast)
+        run: |
+          curl -Ls -o micromamba.exe https://github.com/mamba-org/micromamba-releases/releases/latest/download/micromamba-win-64.exe
+          export MAMBA_ROOT_PREFIX="$(pwd)/micromamba-root"
+          ./micromamba.exe create -y -n oiio -c conda-forge openimageio
+        shell: bash
+
+      - name: Verify oiiotool
+        run: $(pwd)/micromamba-root/envs/oiio/Library/bin/oiiotool.exe --version
+        shell: bash
+
+      # Try plain rvio.exe as-is first, per user direction: cheapest
+      # possible check before investing in provisioning a Windows OSMesa
+      # equivalent (there is currently no vendored OSMesa for Windows in
+      # this codebase, so rvio_sw would not build here without real setup
+      # work -- see project memory). Qt's bundled opengl32sw.dll
+      # (included in build-windows's default windows_qt6_archives) may
+      # let Qt's platform plugin fall back to software OpenGL
+      # automatically if no compatible GPU driver is present.
+      - name: DEBUG - bare rvio.exe smoke test (single trivial render, no session)
+        continue-on-error: true
+        run: |
+          "$(pwd)/_install/bin/rvio.exe" "smptebars,width=64,height=64,depth=16f,fps=24.0,start=1,end=1.movieproc" \
+            -o /tmp/smoke-windows.#.exr -t 1 -outhalf -err-to-out
+          echo "exit code: $?"
+        shell: bash
+
+      # Measure only: run against the existing (macOS-derived) goldens
+      # as-is, no --generate, no suite changes. continue-on-error so we
+      # get the full pass/fail breakdown instead of stopping at the first
+      # red case.
+      - name: Run rv-viewing-modes-test (measure against existing goldens)
+        continue-on-error: true
+        run: |
+          export PATH="$(pwd)/micromamba-root/envs/oiio/Library/bin:$PATH"
+          python src/test/rv-viewing-modes-test/rv_viewing_modes_test.py --rv "$(pwd)/_install" -v
+        shell: bash
+
+      - name: DEBUG - dump rvio per-case logs
+        if: always()
+        run: |
+          find src/test/rv-viewing-modes-test/out -name '*.log' -print -exec cat {} \; || echo "no per-case logs found"
+        shell: bash
+
+      - name: Upload measured output (rendered frames + logs)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-measure-output
+          path: src/test/rv-viewing-modes-test/out

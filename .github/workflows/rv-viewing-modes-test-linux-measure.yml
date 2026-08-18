@@ -1,0 +1,150 @@
+name: OpenRV Viewing Modes Test - Linux (measure, trial)
+
+# Trial per docs/decisions/2026-07-27-cross-platform-reference-strategy.md
+# (rv-test-suite repo) section 4, "Proposed first action: measure" --
+# render the existing 24 cases on Linux against the macOS-derived goldens
+# and count failures, with no suite/golden changes. Manual dispatch only;
+# not wired into pull_request so it doesn't run on every push.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  measure-linux:
+    name: 'rv-viewing-modes-test measure (Rocky Linux 9 CY2025 Release)'
+    runs-on: ubuntu-latest
+    container:
+      image: amd64/rockylinux:9
+      volumes:
+        - /usr/local/lib/android:/github/home/android
+        - /usr/share/dotnet:/github/home/dotnet
+        - /opt/ghc:/github/home/ghc
+        - /usr/local/.ghcup:/github/home/.ghcup
+        - /usr/local/graalvm:/github/home/graalvm
+        - /usr/local/share/powershell:/github/home/powershell
+        - /usr/local/share/chromium:/github/home/chromium
+        - /usr/local/lib/node_modules:/github/home/node_modules
+        - /opt/hostedtoolcache:/github/home/hostedtoolcache
+        - /usr/local/share/boost:/github/home/boost
+        - /usr/share/swift:/github/home/swift
+        - /usr/share/miniconda:/github/home/miniconda
+        - /usr/local/share/vcpkg:/github/home/vcpkg
+        - /home/runner/.cargo:/github/home/.cargo
+        - /home/runner/.rustup:/github/home/.rustup
+    steps:
+      # curl is deliberately not listed: the base image ships curl-minimal,
+      # which already provides /usr/bin/curl, and dnf install curl conflicts
+      # with it (curl-minimal vs curl package conflict).
+      - name: Install git/tar/bzip2 (base image is minimal)
+        run: dnf install -y git tar bzip2 ca-certificates
+        shell: bash
+
+      # RV's own OIIO dependency build sets -DOIIO_BUILD_TOOLS=OFF, so no
+      # oiiotool comes out of the RV build on any platform (confirmed: the
+      # installed RV.app on macOS ships libOpenImageIO.dylib but no
+      # oiiotool binary). Fetch one via micromamba/conda-forge -- fast, and
+      # deliberately BEFORE the ~1hr RV build below so a broken oiiotool
+      # install fails in ~1 minute instead of after the full build.
+      # Deliberately NOT added to $GITHUB_PATH: that would leak into every
+      # later step, including the RV build below. It bit us once already --
+      # RV's own OIIO dependency build linked against this env's libxml2.so
+      # instead of its own vendored one, because $GITHUB_PATH additions
+      # persist for the rest of the job and CMake's FindLibXml2 picked up
+      # this env's xml2-config off PATH. Keep it out of PATH entirely until
+      # the one step that actually needs oiiotool, below.
+      - name: Install oiiotool via micromamba (fail fast, before the RV build)
+        run: |
+          curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
+          export MAMBA_ROOT_PREFIX="$HOME/micromamba"
+          ./bin/micromamba create -y -n oiio -c conda-forge openimageio
+        shell: bash
+
+      - name: Verify oiiotool
+        run: $HOME/micromamba/envs/oiio/bin/oiiotool --version
+        shell: bash
+
+      - name: Check out repository code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          submodules: recursive
+
+      - uses: ./.github/actions/build-linux
+        with:
+          rocky-version: "9"
+          build-type: "Release"
+          qt-version: "6.5.3"
+          cmake-version: "3.31.6"
+          python-version: "3.11.8"
+          vfx-platform: "CY2025"
+          extra_repo: "crb"
+
+      - name: Verify built rvio location
+        run: ls -la "$(pwd)/_install/bin/rvio"
+        shell: bash
+
+      # Cache the built install so a future debugging-only iteration can
+      # download this instead of paying the ~1-2hr build cost again. Each
+      # round trip on this build is expensive; this only needs to happen
+      # once per successful build, not per fix attempt.
+      - name: Upload built _install (for fast iteration without rebuilding)
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-install
+          path: _install
+          retention-days: 3
+
+      # Root cause found (run 32053038154 gdb backtrace): rvio's
+      # CMakeLists.txt always defines -DRVIO_HW=1 on every platform, so
+      # plain `rvio` always takes the FBOVideoDevice (hardware/GLX)
+      # branch in main.cpp -- it crashes in FBOVideoDevice's constructor
+      # trying to create a real GL context, because this container has
+      # no X server/GPU. RV ships a dedicated headless-rendering binary
+      # for exactly this, `rvio_sw` (src/bin/imgtools/rvio_sw/ -- same
+      # main.cpp/utf8Main.cpp sources, built WITHOUT RVIO_HW, so it takes
+      # the OSMesaVideoDevice branch instead), and it's already built and
+      # installed alongside rvio by this same build. macOS solves the
+      # same headless-GPU problem with a runtime flag (-swRenderer) since
+      # its FBOVideoDevice can toggle at runtime; Linux instead ships an
+      # entirely separate binary for it.
+      #
+      # The suite's rvio_binary() only ever looks for a file literally
+      # named `rvio`/`rvio.exe`, so point it at rvio_sw without touching
+      # suite code: overwrite the `rvio` wrapper script with a copy of
+      # rvio_sw's wrapper. The wrapper's internal `name` variable (which
+      # determines which `.bin` it execs) stays "rvio_sw" regardless of
+      # what the file on disk is named, so this transparently runs the
+      # software-rendering binary under the `rvio` name the suite expects.
+      - name: Use rvio_sw (headless/software rendering) as rvio for this CI runner
+        run: |
+          RV_HOME="$(pwd)/_install"
+          echo "--- confirming rvio_sw works before swapping it in ---"
+          "$RV_HOME/bin/rvio_sw" "smptebars,width=64,height=64,depth=16f,fps=24.0,start=1,end=1.movieproc" \
+            -o /tmp/smoke-sw.#.exr -t 1 -outhalf -err-to-out
+          cp -f "$RV_HOME/bin/rvio_sw" "$RV_HOME/bin/rvio"
+        shell: bash
+
+      # Measure only: run against the existing (macOS-derived) goldens
+      # as-is, no --generate, no suite changes. continue-on-error so we
+      # get the full pass/fail breakdown instead of stopping at the first
+      # red case.
+      - name: Run rv-viewing-modes-test (measure against existing goldens)
+        continue-on-error: true
+        run: |
+          export PATH="$HOME/micromamba/envs/oiio/bin:$PATH"
+          python3 src/test/rv-viewing-modes-test/rv_viewing_modes_test.py --rv "$(pwd)/_install" -v
+        shell: bash
+
+      - name: DEBUG - dump rvio per-case logs
+        if: always()
+        run: |
+          find src/test/rv-viewing-modes-test/out -name '*.log' -print -exec cat {} \; || echo "no per-case logs found"
+        shell: bash
+
+      - name: Upload measured output (rendered frames + logs)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-measure-output
+          path: src/test/rv-viewing-modes-test/out

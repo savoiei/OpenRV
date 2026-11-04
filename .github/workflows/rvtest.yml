@@ -1,0 +1,148 @@
+name: rvtest suites (fork trial)
+
+# Phase 2 of rv-regression-tests (Ian's fork only): run native rvtest suites
+# copied under src/test/ against a fresh OpenRV build, one suite per step.
+# Plan: rv-regression-tests docs/superpowers/plans/2026-11-04-phase2-openrv-fork-ci.md
+# Copies are never edited here: edit in rv-regression-tests and re-copy.
+#
+# No GPU on GitHub runners, so suites run with --sw-renderer:
+#   macOS: rvio -swRenderer (fork-only patch dacb1e1, cherry-picked on this branch)
+#   Linux: rvio_sw (OSMesa, headless; no display needed)
+# Windows has no software renderer and is out of scope.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  macos:
+    name: 'rvtest session (macos-14 arm64 CY2025 Release)'
+    runs-on: macos-14
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          submodules: recursive
+
+      - uses: ./.github/actions/build-macos
+        with:
+          arch-type: "arm64"
+          build-type: "Release"
+          qt-version: "6.5.3"
+          qt-version-short: "6.5"
+          python-version: "3.11"
+          cmake-version: "3.31.6"
+          vfx-platform: "CY2025"
+
+      # RV's OIIO dependency is built with OIIO_BUILD_TOOLS=OFF: no oiiotool ships.
+      - name: Install oiiotool
+        run: brew install openimageio
+        shell: bash
+
+      - name: Show install layout (rvio, bundled Python)
+        run: |
+          ls -la "$GITHUB_WORKSPACE/_install/RV.app/Contents/MacOS/" | grep -E "rvio|python" || true
+        shell: bash
+
+      - name: Run session suite
+        run: |
+          python3 src/test/session/run.py --rv "$GITHUB_WORKSPACE/_install/RV.app" \
+            --sw-renderer --no-skips --oiiotool "$(command -v oiiotool)" -v 2>&1 | tee session-console.txt
+          exit "${PIPESTATUS[0]}"
+        shell: bash
+
+      - name: Summary
+        if: always()
+        run: |
+          { echo '### session (macOS)'; echo '```'; tail -n 30 session-console.txt 2>/dev/null || echo "no console output"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+        shell: bash
+
+      - name: Upload session output
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rvtest-session-macos
+          path: |
+            src/test/session/out
+            session-console.txt
+
+  linux:
+    name: 'rvtest session (Rocky Linux 9 CY2025 Release)'
+    runs-on: ubuntu-latest
+    container:
+      image: amd64/rockylinux:9
+      volumes:
+        - /usr/local/lib/android:/github/home/android
+        - /usr/share/dotnet:/github/home/dotnet
+        - /opt/ghc:/github/home/ghc
+        - /usr/local/.ghcup:/github/home/.ghcup
+        - /usr/local/graalvm:/github/home/graalvm
+        - /usr/local/share/powershell:/github/home/powershell
+        - /usr/local/share/chromium:/github/home/chromium
+        - /usr/local/lib/node_modules:/github/home/node_modules
+        - /opt/hostedtoolcache:/github/home/hostedtoolcache
+        - /usr/local/share/boost:/github/home/boost
+        - /usr/share/swift:/github/home/swift
+        - /usr/share/miniconda:/github/home/miniconda
+        - /usr/local/share/vcpkg:/github/home/vcpkg
+        - /home/runner/.cargo:/github/home/.cargo
+        - /home/runner/.rustup:/github/home/.rustup
+    steps:
+      # curl is not listed: the base image's curl-minimal conflicts with curl.
+      - name: Install git/tar/bzip2 (base image is minimal)
+        run: dnf install -y git tar bzip2 ca-certificates
+        shell: bash
+
+      # oiiotool from conda-forge, BEFORE the build so a broken install fails
+      # fast. Never added to $GITHUB_PATH: that once leaked into RV's own
+      # dependency build (FindLibXml2 picked this env's libxml2). The suite
+      # gets the binary via --oiiotool instead.
+      - name: Install oiiotool via micromamba
+        run: |
+          curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba
+          export MAMBA_ROOT_PREFIX="$HOME/micromamba"
+          ./bin/micromamba create -y -n oiio -c conda-forge openimageio
+          "$HOME/micromamba/envs/oiio/bin/oiiotool" --version
+        shell: bash
+
+      - name: Check out repository code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          submodules: recursive
+
+      - uses: ./.github/actions/build-linux
+        with:
+          rocky-version: "9"
+          build-type: "Release"
+          qt-version: "6.5.3"
+          cmake-version: "3.31.6"
+          python-version: "3.11.8"
+          vfx-platform: "CY2025"
+          extra_repo: "crb"
+
+      - name: Show install layout (rvio, rvio_sw, bundled Python)
+        run: |
+          ls -la "$GITHUB_WORKSPACE/_install/bin/" | grep -E "rvio|python" || true
+        shell: bash
+
+      - name: Run session suite
+        run: |
+          python3 src/test/session/run.py --rv "$GITHUB_WORKSPACE/_install" \
+            --sw-renderer --no-skips --oiiotool "$HOME/micromamba/envs/oiio/bin/oiiotool" -v 2>&1 | tee session-console.txt
+          exit "${PIPESTATUS[0]}"
+        shell: bash
+
+      - name: Summary
+        if: always()
+        run: |
+          { echo '### session (Linux)'; echo '```'; tail -n 30 session-console.txt 2>/dev/null || echo "no console output"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+        shell: bash
+
+      - name: Upload session output
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rvtest-session-linux
+          path: |
+            src/test/session/out
+            session-console.txt
